@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  FlatList,
 } from "react-native";
 import API from "../api";
 
@@ -155,80 +156,94 @@ export default function AdminReservationsScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      <TouchableOpacity
-        onPress={() => {
-          resetForm();
-          setShowModal(true);
-        }}
-        style={{
-          backgroundColor: "#2563eb",
-          padding: 12,
-          borderRadius: 8,
-          margin: 20,
-        }}
-      >
-        <Text style={{ color: "white", fontWeight: "bold" }}>
-          + Ajouter Réservation
-        </Text>
-      </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: "#f9fafb" }}>
+      <View style={{ paddingHorizontal: 20, paddingVertical: 15 }}>
+        <TouchableOpacity
+          onPress={() => {
+            resetForm();
+            setShowModal(true);
+          }}
+          style={{
+            backgroundColor: "#2563eb",
+            padding: 12,
+            borderRadius: 8,
+          }}
+        >
+          <Text style={{ color: "white", fontWeight: "bold", textAlign: "center" }}>
+            + Ajouter Réservation
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      <ScrollView style={{ paddingHorizontal: 20 }}>
-        <Text style={{ fontSize: 22, fontWeight: "bold", marginBottom: 20 }}>
+      <View style={{ flex: 1, paddingHorizontal: 20 }}>
+        <Text style={{ fontSize: 22, fontWeight: "bold", marginBottom: 15 }}>
           📅 Liste des réservations
         </Text>
-        {console.log("Rendering reservations:", reservations.length)}
-        {reservations.length === 0 && (
-          <Text style={{ fontStyle: "italic", color: "gray" }}>
-            Aucune réservation trouvée
-          </Text>
-        )}
 
-        {reservations.map((r) => (
-          <View
-            key={r._id}
-            style={{
-              padding: 15,
-              backgroundColor: "#f3f3f3",
-              borderRadius: 10,
-              marginBottom: 15,
-            }}
-          >
-            <Text>Joueur : {r.joueur?.nom || "Inconnu"}</Text>
-            <Text>Terrain : {r.terrain?.nom || "Inconnu"}</Text>
-            <Text>Date : {new Date(r.date).toLocaleDateString()}</Text>
-            <Text>Heure : {r.heureDebut} → {r.heureFin}</Text>
-            <Text>Status : {r.statusReservation}</Text>
-            <Text>Paiement : {r.statusPaiement}</Text>
-            <Text>Prix : {r.prix} MAD</Text>
-            <View style={{ flexDirection: "row", marginTop: 10 }}>
-              <TouchableOpacity
-                onPress={() => handleEdit(r)}
-                style={{
-                  backgroundColor: "#f59e0b",
-                  padding: 10,
-                  borderRadius: 5,
-                  flex: 1,
-                }}
-              >
-                <Text style={{ color: "white", textAlign: "center" }}>Modifier</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleDelete(r._id)}
-                style={{
-                  backgroundColor: "#ef4444",
-                  padding: 10,
-                  borderRadius: 5,
-                  flex: 1,
-                  marginLeft: 10,
-                }}
-              >
-                <Text style={{ color: "white", textAlign: "center" }}>Supprimer</Text>
-              </TouchableOpacity>
+        <FlatList
+          data={reservations}
+          keyExtractor={(item) => item._id}
+          scrollEnabled={true}
+          showsVerticalScrollIndicator={true}
+          renderItem={({ item: r }) => (
+            <View
+              style={{
+                padding: 15,
+                backgroundColor: "white",
+                borderRadius: 10,
+                marginBottom: 15,
+                borderLeftWidth: 5,
+                borderLeftColor: "#2563eb",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 3,
+                elevation: 2,
+              }}
+            >
+              <Text style={{ fontWeight: "bold", marginBottom: 8 }}>👤 Joueur : {r.joueur?.nom || "Inconnu"}</Text>
+              <Text style={{ marginBottom: 4 }}>🏟️ Terrain : {r.terrain?.nom || "Inconnu"}</Text>
+              <Text style={{ marginBottom: 4 }}>📅 Date : {new Date(r.date).toLocaleDateString()}</Text>
+              <Text style={{ marginBottom: 4 }}>⏰ Heure : {r.heureDebut} → {r.heureFin}</Text>
+              <Text style={{ marginBottom: 4 }}>📊 Status : <Text style={{ fontWeight: "bold", color: "#10b981" }}>{r.statusReservation}</Text></Text>
+              <Text style={{ marginBottom: 4 }}>💳 Paiement : <Text style={{ fontWeight: "bold", color: r.statusPaiement === "paye" ? "#10b981" : "#f59e0b" }}>{r.statusPaiement}</Text></Text>
+              <Text style={{ marginBottom: 12, fontSize: 16, fontWeight: "bold", color: "#2563eb" }}>💰 Prix : {r.prix} MAD</Text>
+              
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => handleEdit(r)}
+                  style={{
+                    backgroundColor: "#f59e0b",
+                    padding: 10,
+                    borderRadius: 6,
+                    flex: 1,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "white", textAlign: "center", fontWeight: "bold" }}>✏️ Modifier</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDelete(r._id)}
+                  style={{
+                    backgroundColor: "#ef4444",
+                    padding: 10,
+                    borderRadius: 6,
+                    flex: 1,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "white", textAlign: "center", fontWeight: "bold" }}>🗑️ Supprimer</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        ))}
-      </ScrollView>
+          )}
+          ListEmptyComponent={
+            <Text style={{ fontStyle: "italic", color: "gray", textAlign: "center", marginTop: 20 }}>
+              Aucune réservation trouvée
+            </Text>
+          }
+        />
+      </View>
 
       {/* MODAL AJOUT/ÉDITION */}
       <Modal visible={showModal} animationType="slide">
