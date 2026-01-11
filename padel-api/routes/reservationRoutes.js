@@ -9,48 +9,158 @@ const router = express.Router();
 // POST /api/reservations  (joueur connecté ou admin)
 router.post('/', protect, async (req, res) => {
   try {
-    const { terrainId, date, heureDebut, heureFin, methodePaiement, joueurId } = req.body;
+    const { terrainId, date, time, methodePaiement, statusPaiement, statusReservation } = req.body;
+
+    // Vérifier que tous les champs obligatoires sont présents
+    if (!terrainId || !date || !time) {
+      return res.status(400).json({ message: 'Tous les champs sont obligatoires' });
+    }
 
     // Vérifier terrain existe
     const terrain = await Terrain.findById(terrainId);
     if (!terrain) return res.status(404).json({ message: 'Terrain non trouvé' });
 
-    // Vérifier disponibilité
+    // Parser la date au format JJ/MM/AAAA en UTC
+    let reservationDate;
+    if (date.includes('/')) {
+      const [jour, mois, annee] = date.split('/');
+      reservationDate = new Date(Date.UTC(parseInt(annee), parseInt(mois) - 1, parseInt(jour)));
+    } else {
+      reservationDate = new Date(date);
+    }
+
+    // Vérifier que la date est valide
+    if (isNaN(reservationDate.getTime())) {
+      return res.status(400).json({ message: 'Format de date invalide. Utilisez JJ/MM/AAAA' });
+    }
+
+    // Vérifier que la date n'est pas dans le passé
+    const today = new Date();
+    const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    if (reservationDate < todayUTC) {
+      return res.status(400).json({ message: 'La date ne peut pas être dans le passé' });
+    }
+
+    // Parser l'heure et valider entre 9h et 23h
+    const [heureStr, minutesStr] = time.split(':');
+    const heure = parseInt(heureStr);
+    const minutes = parseInt(minutesStr);
+
+    if (isNaN(heure) || isNaN(minutes)) {
+      return res.status(400).json({ message: 'Format d\'heure invalide. Utilisez HH:MM' });
+    }
+
+    if (heure < 9 || heure >= 23) {
+      return res.status(400).json({ message: 'Les réservations sont disponibles de 9h à 23h' });
+    }
+
+    // Vérifier que ce n'est pas passé (pour aujourd'hui)
+    if (reservationDate.getTime() === todayUTC.getTime()) {
+      const now = new Date();
+      if (heure < now.getHours() || (heure === now.getHours() && minutes <= now.getMinutes())) {
+        return res.status(400).json({ message: 'Ce créneau est dans le passé' });
+      }
+    }
+
+    const heureDebut = `${String(heure).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`; // ex: "18:00"
+    const heureFin = `${String(heure + 1).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`; // +1h
+
+    // Vérifier disponibilité : pas de chevauchement avec les réservations CONFIRMEES ou EN_ATTENTE
+    const dateDebut = new Date(reservationDate);
+    dateDebut.setHours(heure, minutes, 0);
+    
+    const dateFin = new Date(reservationDate);
+    dateFin.setHours(heure + 1, minutes, 0);
+
     const reservationExistante = await Reservation.findOne({
       terrain: terrainId,
-      date,
+      date: {
+        $gte: new Date(reservationDate.getFullYear(), reservationDate.getMonth(), reservationDate.getDate()),
+        $lt: new Date(reservationDate.getFullYear(), reservationDate.getMonth(), reservationDate.getDate() + 1)
+      },
+      statusReservation: { $in: ['en_attente', 'confirmee'] },
       $or: [
         { heureDebut: { $lt: heureFin }, heureFin: { $gt: heureDebut } }
       ]
     });
 
     if (reservationExistante) {
-      return res.status(400).json({ message: 'Terrain déjà réservé à ce créneau.' });
+      return res.status(400).json({ 
+        message: 'Ce créneau est déjà réservé',
+        occupiedSlot: {
+          heureDebut: reservationExistante.heureDebut,
+          heureFin: reservationExistante.heureFin
+        }
+      });
     }
 
     // Calcul prix
     const prix = terrain.prixParHeure;
 
-    // Créer la réservation
+    // Créer la réservation avec les paramètres reçus
     const reservation = await Reservation.create({
-      joueur: joueurId || req.user._id, // admin peut spécifier joueurId
+      joueur: req.user._id,
       terrain: terrainId,
-      date,
+      date: reservationDate,
       heureDebut,
       heureFin,
-      methodePaiement: methodePaiement || 'en_ligne',
-      statusPaiement: methodePaiement === 'en_ligne' ? 'paye' : 'en_attente',
-      statusReservation: 'confirmee',
+      methodePaiement: methodePaiement || 'sur_site',
+      statusPaiement: statusPaiement || 'en_attente',
+      statusReservation: statusReservation || 'en_attente',
       prix
     });
 
+    await reservation.populate('joueur', 'nom email');
+    await reservation.populate('terrain');
+
     res.status(201).json(reservation);
+  } catch (err) {
+    console.error("Erreur POST réservation:", err);
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+
+
+// GET /api/reservations/occupied?terrainId=...&date=...  → créneaux occupés pour un terrain une date donnée
+router.get('/occupied', async (req, res) => {
+  try {
+    const { terrainId, date } = req.query;
+
+    if (!terrainId || !date) {
+      return res.status(400).json({ message: 'terrainId et date sont obligatoires' });
+    }
+
+    // Parser la date
+    let reservationDate;
+    if (date.includes('/')) {
+      const [jour, mois, annee] = date.split('/');
+      reservationDate = new Date(Date.UTC(parseInt(annee), parseInt(mois) - 1, parseInt(jour)));
+    } else {
+      reservationDate = new Date(date);
+    }
+
+    // Récupérer toutes les réservations confirmées/en attente pour ce terrain ce jour
+    const reservations = await Reservation.find({
+      terrain: terrainId,
+      date: {
+        $gte: reservationDate,
+        $lt: new Date(Date.UTC(reservationDate.getUTCFullYear(), reservationDate.getUTCMonth(), reservationDate.getUTCDate() + 1))
+      },
+      statusReservation: { $in: ['en_attente', 'confirmee'] }
+    });
+
+    const occupiedSlots = reservations.map(r => ({
+      heureDebut: r.heureDebut,
+      heureFin: r.heureFin,
+      joueur: r.joueur
+    }));
+
+    res.json(occupiedSlots);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
-
 
 // GET /api/reservations/me  → réservations du joueur connecté
 router.get('/me', protect, async (req, res) => {

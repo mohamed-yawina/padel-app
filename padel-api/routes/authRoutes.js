@@ -64,4 +64,9 @@ router.get('/profile', protect, async (req, res) => {
   res.json(req.user);
 });
 
+// GET /api/auth/me  → profil de l'utilisateur connecté (alias)
+router.get('/me', protect, async (req, res) => {
+  res.json(req.user);
+});
+
 module.exports = router;

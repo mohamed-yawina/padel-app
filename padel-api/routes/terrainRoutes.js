@@ -32,7 +32,8 @@ router.post("/", protect, isAdmin, async (req, res) => {
 
     fs.writeFileSync(uploadPath, base64Data, "base64");
 
-    const imageUrl = `${process.env.SERVER_URL}/uploads/${fileName}`;
+    const hostUrl = `${req.protocol}://${req.get("host")}`;
+    const imageUrl = `${hostUrl}/uploads/${fileName}`;
 
     const terrain = await Terrain.create({
       nom,
@@ -75,7 +76,8 @@ router.put("/:id", protect, async (req, res) => {
         const oldPath = path.join(__dirname, "..", "uploads", path.basename(terrain.imageUrl));
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
-      terrain.imageUrl = `${process.env.SERVER_URL}/uploads/${fileName}`;
+      const hostUrl = `${req.protocol}://${req.get("host")}`;
+      terrain.imageUrl = `${hostUrl}/uploads/${fileName}`;
     }
 
     await terrain.save();
