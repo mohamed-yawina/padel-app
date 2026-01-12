@@ -206,11 +206,11 @@ router.post('/create-checkout-session', async (req, res) => {
     // URL par défaut si non fournies
     const defaultSuccessUrl = process.env.SERVER_URL 
       ? `${process.env.SERVER_URL}/api/stripe/payment-success` 
-      : 'https://hamza-glossier-concurrently.ngrok-free.dev/api/stripe/payment-success';
+      : 'https://jerrold-hyacinthine-valene.ngrok-free.dev/api/stripe/payment-success';
     
     const defaultCancelUrl = process.env.SERVER_URL 
       ? `${process.env.SERVER_URL}/api/stripe/payment-cancel` 
-      : 'https://hamza-glossier-concurrently.ngrok-free.dev/api/stripe/payment-cancel';
+      : 'https://jerrold-hyacinthine-valene.ngrok-free.dev/api/stripe/payment-cancel';
 
     // Créer la session Stripe
     const session = await stripe.checkout.sessions.create({
@@ -283,11 +283,16 @@ router.post('/verify-and-create-reservation/:sessionId', async (req, res) => {
     console.log('📝 Métadonnées:', JSON.stringify(session.metadata));
     
     // Vérifier si réservation existe déjà (ne pas créer de doublon)
+    const dateStr = session.metadata.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1');
+    const dateStart = new Date(dateStr);
+    const dateEnd = new Date(dateStart);
+    dateEnd.setDate(dateStart.getDate() + 1);
+    
     const existingReservation = await Reservation.findOne({
       terrain: session.metadata.terrainId,
       date: {
-        $gte: new Date(session.metadata.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1')),
-        $lt: new Date(session.metadata.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1')).setDate(new Date(session.metadata.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1')).getDate() + 1)
+        $gte: dateStart,
+        $lt: dateEnd
       },
       statusPaiement: 'paye'
     });

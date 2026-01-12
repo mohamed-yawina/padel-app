@@ -5,7 +5,7 @@ import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Utiliser directement NGROK pour mobile, localhost pour web
-const NGROK_URL = "https://hamza-glossier-concurrently.ngrok-free.dev";
+const NGROK_URL = "https://jerrold-hyacinthine-valene.ngrok-free.dev";
 const LOCAL_URL = "http://localhost:5000";
 
 const API = axios.create({

@@ -183,26 +183,31 @@ router.delete('/:id', protect, async (req, res) => {
       await Reservation.findByIdAndDelete(req.params.id);
       res.json({ message: 'Réservation supprimée' });
     } else {
-      // Joueur : annulation
+      // Joueur : annulation (suppression)
       if (reservation.joueur.toString() !== req.user._id.toString()) {
         return res.status(403).json({ message: 'Vous ne pouvez annuler que vos propres réservations.' });
       }
 
       // Vérifier que la réservation n'est pas passée
       const now = new Date();
-      const dateRes = new Date(reservation.date + ' ' + reservation.heureDebut);
+      const reservationDate = new Date(reservation.date);
+      const [hours, minutes] = reservation.heureDebut.split(':');
+      reservationDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-      if (dateRes < now) {
+      if (reservationDate < now) {
         return res.status(400).json({ message: 'Vous ne pouvez pas annuler une réservation déjà passée.' });
       }
 
-      // Annulation
-      reservation.statusReservation = 'annulee';
-      await reservation.save();
+      // Vérifier qu'il reste au moins 1 heure avant le match
+      if (reservationDate - now < 60 * 60 * 1000) {
+        return res.status(400).json({ message: 'Vous ne pouvez pas annuler une réservation moins de 1 heure avant le match.' });
+      }
+
+      // Suppression de la réservation
+      await Reservation.findByIdAndDelete(req.params.id);
 
       res.json({
-        message: 'Réservation annulée avec succès.',
-        reservation
+        message: 'Réservation annulée et supprimée avec succès.',
       });
     }
   } catch (err) {

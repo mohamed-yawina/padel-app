@@ -33,7 +33,9 @@ export default function AdminReservationsScreen() {
       console.log("DATA FROM API:", res.data);
 
       if (Array.isArray(res.data)) {
-        setReservations(res.data);
+        // Filtrer les réservations annulées
+        const activeReservations = res.data.filter(r => r.statusReservation !== 'annulee');
+        setReservations(activeReservations);
       } else {
         setReservations([]); // évite les crash
       }

@@ -21,3 +21,6 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+# Uploads utilisateurs
+uploads/
+padel-api/uploads/

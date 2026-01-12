@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, RefreshControl } from "react-native";
 import { Clock, MapPin, Calendar, User, AlertCircle } from "../utils/icons";
 import API from "../api";
 import * as SecureStore from "expo-secure-store";
@@ -9,6 +9,7 @@ import { Platform } from 'react-native';
 export default function CourtsScreen() {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Robust token retrieval: try SecureStore (native), AsyncStorage, then localStorage (web)
   const getStoredToken = async () => {
@@ -81,8 +82,10 @@ export default function CourtsScreen() {
     loadUserAndReservations();
   }, []);
 
-  const loadUserAndReservations = async () => {
+  const loadUserAndReservations = async (isRefresh = false) => {
     try {
+      if (!isRefresh) setLoading(true);
+      else setRefreshing(true);
       const token = await getStoredToken();
       if (!token) {
         setLoading(false);
@@ -96,13 +99,9 @@ export default function CourtsScreen() {
       console.log('loadUserAndReservations: token present len=', token ? token.length : 0);
 
       // Charger les réservations
-      const res = await API.get("/reservations");
+      const res = await API.get("/reservations/me");
       const userReservations = res.data.filter((r) => {
-        if (r.statusReservation !== "confirmee") return false;
-        // Supporter plusieurs formats : r.joueur may be {_id: '...'} or a direct id/string
-        const rUser = r.joueur && (r.joueur._id ? r.joueur._id : r.joueur);
-        if (!rUser) return false;
-        return String(rUser) === currentUserId;
+        return r.statusReservation === "confirmee";
       });
       setReservations(userReservations.sort((a, b) => new Date(a.date) - new Date(b.date)));
     } catch (err) {
@@ -112,7 +111,33 @@ export default function CourtsScreen() {
         console.log('API error response data:', err.response.data);
       }
     } finally {
-      setLoading(false);
+      if (!isRefresh) setLoading(false);
+      else setRefreshing(false);
+    }
+  };
+
+  const canCancelReservation = (reservation) => {
+    const now = new Date();
+    const reservationDate = new Date(reservation.date);
+    const [hours, minutes] = reservation.heureDebut.split(':');
+    reservationDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    const timeDiff = reservationDate - now;
+    return timeDiff > 60 * 60 * 1000; // More than 1 hour
+  };
+
+  const onRefresh = () => {
+    loadUserAndReservations(true);
+  };
+
+  const cancelReservation = async (reservationId) => {
+    try {
+      await API.delete(`/reservations/${reservationId}`);
+      Alert.alert("Succès", "Réservation annulée et supprimée avec succès.");
+      onRefresh(); // Refresh the list
+    } catch (err) {
+      console.log("Erreur annulation:", err);
+      const message = err.response?.data?.message || "Erreur lors de l'annulation";
+      Alert.alert("Erreur", message);
     }
   };
 
@@ -125,7 +150,11 @@ export default function CourtsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={true}>
+    <ScrollView 
+      style={styles.container} 
+      showsVerticalScrollIndicator={true}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <View style={styles.header}>
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
           <MapPin size={28} color="#2563eb" style={{ marginRight: 10 }} />
@@ -238,6 +267,23 @@ export default function CourtsScreen() {
                 </Text>
               </Text>
             </View>
+
+            {/* Bouton Annuler */}
+            <TouchableOpacity
+              style={[
+                styles.cancelButton,
+                !canCancelReservation(reservation) && styles.cancelButtonDisabled
+              ]}
+              onPress={() => cancelReservation(reservation._id)}
+              disabled={!canCancelReservation(reservation)}
+            >
+              <Text style={[
+                styles.cancelButtonText,
+                !canCancelReservation(reservation) && styles.cancelButtonTextDisabled
+              ]}>
+                {!canCancelReservation(reservation) ? "Annulation impossible (< 1h)" : "Annuler la réservation"}
+              </Text>
+            </TouchableOpacity>
           </View>
         ))
       )}
@@ -400,5 +446,24 @@ const styles = StyleSheet.create({
   statusSubtext: {
     fontSize: 12,
     color: "#475569",
+  },
+  cancelButton: {
+    backgroundColor: "#ef4444",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: "center",
+  },
+  cancelButtonDisabled: {
+    backgroundColor: "#9ca3af",
+  },
+  cancelButtonText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  cancelButtonTextDisabled: {
+    color: "#6b7280",
   },
 });
